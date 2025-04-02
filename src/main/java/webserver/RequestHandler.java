@@ -61,7 +61,7 @@ public class RequestHandler implements Runnable{
                 );
                 MemoryUserRepository.getInstance().addUser(user);
 
-                response302Header(dos, 0, "/index.html");
+                response302Header(dos,"/index.html");
                 return;
             }
 
@@ -114,16 +114,12 @@ public class RequestHandler implements Runnable{
         }
     }
 
-    private void response302Header(DataOutputStream dos, int lengthOfBodyContent, String path) {
+    private void response302Header(DataOutputStream dos, String path) {
         try {
             // 302 Found (리다이렉트)
             dos.writeBytes("HTTP/1.1 302 Found \r\n");
             //리다이렉트 위치
             dos.writeBytes("Location: "+ path + "\r\n");
-            // 보내는 데이터 html, 인코딩 utf-8
-            dos.writeBytes("Content-Type: text/html;charset=utf-8\r\n");
-            // 본문의 바이트 크기
-            dos.writeBytes("Content-Length: " + lengthOfBodyContent + "\r\n");
             // empty line
             dos.writeBytes("\r\n");
         } catch (IOException e) {
