@@ -2,6 +2,7 @@ package webserver;
 
 import db.MemoryUserRepository;
 import http.util.HttpRequestUtils;
+import http.util.IOUtils;
 import model.User;
 
 import java.io.*;
@@ -34,21 +35,56 @@ public class RequestHandler implements Runnable{
             String[] requestTokens = requestLine.split(" ");
             String url = requestTokens[1];
 
-            // GET 방식으로 회원가입하기
-            if (url.startsWith("/user/signup")) {
-                // ?를 기준으로 구분
-                String[] signupUrl = url.split("\\?");
-                if (signupUrl.length==2) {
-                    String signupString = signupUrl[1];
-                    Map<String, String> userValues = HttpRequestUtils.parseQueryParameter(signupString);
 
-                    User user = new User(userValues.get("userId"),userValues.get("password"),userValues.get("name"),userValues.get("email"));
-                    MemoryUserRepository.getInstance().addUser(user);
+            // POST 방식 - contentLength 값 가져오기
+            int requestContentLength = 0;
+            while (true) {
+                final String line = br.readLine();
+                if (line.equals("")) {
+                    break;
                 }
+                // header info
+                if (line.startsWith("Content-Length")) {
+                    requestContentLength = Integer.parseInt(line.split(": ")[1]);
+                }
+            }
+            // POST 방식으로 회원가입
+            if (url.equals("/user/signup")) {
+                String body = IOUtils.readData(br, requestContentLength);
+                Map<String, String> userValues = HttpRequestUtils.parseQueryParameter(body);
 
-                response302Header(dos,0,"/index.html");
+                User user = new User(
+                        userValues.get("userId"),
+                        userValues.get("password"),
+                        userValues.get("name"),
+                        userValues.get("email")
+                );
+                MemoryUserRepository.getInstance().addUser(user);
+
+                response302Header(dos, 0, "/index.html");
                 return;
             }
+
+//            // GET 방식으로 회원가입
+//            if (url.startsWith("/user/signup")) {
+//                // ?를 기준으로 구분
+//                String[] signupUrl = url.split("\\?");
+//                if (signupUrl.length==2) {
+//                    String signupString = signupUrl[1];
+//                    Map<String, String> userValues = HttpRequestUtils.parseQueryParameter(signupString);
+//
+//                    User user = new User(
+//                        userValues.get("userId"),
+//                        userValues.get("password"),
+//                        userValues.get("name"),
+//                        userValues.get("email")
+//                    );
+//                    MemoryUserRepository.getInstance().addUser(user);
+//                }
+//
+//                response302Header(dos,0,"/index.html");
+//                return;
+//            }
 
             // index.html
             if (url.equals("/")) {
