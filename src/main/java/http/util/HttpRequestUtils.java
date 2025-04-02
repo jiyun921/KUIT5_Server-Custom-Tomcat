@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 public class HttpRequestUtils {
+    // 쿼리 문자열 파싱해서 Map<key,value>로 바꾸기
     public static Map<String, String> parseQueryParameter(String queryString) {
         try {
             String[] queryStrings = queryString.split("&");

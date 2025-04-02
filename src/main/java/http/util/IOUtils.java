@@ -13,6 +13,8 @@ public class IOUtils {
      * 헤더의 Content-Length의 값이 들어와야한다.
      *
      */
+
+    // body부분을 contentLength만큼 읽어서 문자열로 반환
     public static String readData(BufferedReader br, int contentLength) throws IOException {
         char[] body = new char[contentLength];
         br.read(body, 0, contentLength);
