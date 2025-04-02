@@ -48,7 +48,8 @@ public class RequestHandler implements Runnable{
                     requestContentLength = Integer.parseInt(line.split(": ")[1]);
                 }
             }
-            // POST 방식으로 회원가입
+
+            // POST 방식 - 회원가입
             if (url.equals("/user/signup")) {
                 String body = IOUtils.readData(br, requestContentLength);
                 Map<String, String> userValues = HttpRequestUtils.parseQueryParameter(body);
@@ -65,7 +66,7 @@ public class RequestHandler implements Runnable{
                 return;
             }
 
-//            // GET 방식으로 회원가입
+//            // GET 방식 - 회원가입
 //            if (url.startsWith("/user/signup")) {
 //                // ?를 기준으로 구분
 //                String[] signupUrl = url.split("\\?");
@@ -86,12 +87,31 @@ public class RequestHandler implements Runnable{
 //                return;
 //            }
 
+            // POST 방식 - 로그인
+            if (url.equals("/user/login")) {
+                String body = IOUtils.readData(br, requestContentLength);
+                Map<String, String> userValues = HttpRequestUtils.parseQueryParameter(body);
+
+                String loginId = userValues.get("userId");
+                String loginPassword = userValues.get("password");
+
+                User user = MemoryUserRepository.getInstance().findUserById(loginId);
+                if (user != null && user.getPassword().equals(loginPassword)) {
+                    response302HeaderAddCookie(dos,"/index.html");
+                    return;
+                }
+                response302Header(dos,"/user/login_failed.html");
+                return;
+            }
+
+
+
             // index.html
             if (url.equals("/")) {
                 url = "/index.html";
             }
 
-            // .html로 끝나는 경우
+            // .html 반환
             if (url.endsWith(".html")) {
                 File file = new File("./webapp" + url);
                 if (file.exists()) {
@@ -102,8 +122,6 @@ public class RequestHandler implements Runnable{
                 }
             }
 
-
-
             // 응답 본문
             byte[] body = "Hello World".getBytes();
             response200Header(dos, body.length);
@@ -111,6 +129,21 @@ public class RequestHandler implements Runnable{
 
         } catch (IOException e) {
             log.log(Level.SEVERE,e.getMessage());
+        }
+    }
+
+    private void response302HeaderAddCookie(DataOutputStream dos, String path) {
+        try {
+            // 302 Found (리다이렉트)
+            dos.writeBytes("HTTP/1.1 302 Found \r\n");
+            //리다이렉트 위치
+            dos.writeBytes("Location: "+ path + "\r\n");
+            // 쿠키 추가
+            dos.writeBytes("Set-Cookie: logined=true\r\n");
+            // empty line
+            dos.writeBytes("\r\n");
+        } catch (IOException e) {
+            log.log(Level.SEVERE, e.getMessage());
         }
     }
 
