@@ -38,6 +38,7 @@ public class RequestHandler implements Runnable{
 
             // POST 방식 - contentLength 값 가져오기
             int requestContentLength = 0;
+            boolean isLogin = false;
             while (true) {
                 final String line = br.readLine();
                 if (line.equals("")) {
@@ -47,6 +48,22 @@ public class RequestHandler implements Runnable{
                 if (line.startsWith("Content-Length")) {
                     requestContentLength = Integer.parseInt(line.split(": ")[1]);
                 }
+
+                if (line.startsWith("Cookie")) {
+                    String cookieString = line.substring("Cookie: ".length());
+                    String[] cookies = cookieString.split(";");
+                    for (String cookie : cookies) {
+                        String[] kv = cookie.trim().split("=");
+                        if (kv.length == 2) {
+                            String key = kv[0].trim();
+                            String value = kv[1].trim();
+                            if ("logined".equals(key) && "true".equals(value)) {
+                                isLogin = true;
+                            }
+                        }
+                    }
+                }
+
             }
 
             // POST 방식 - 회원가입
@@ -104,7 +121,19 @@ public class RequestHandler implements Runnable{
                 return;
             }
 
-
+            if (url.equals("/user/userList")) {
+                if (isLogin) {
+                    File file = new File("./webapp/user/list.html");
+                    if (file.exists()) {
+                        byte[] body = Files.readAllBytes(file.toPath());
+                        response200Header(dos, body.length);
+                        responseBody(dos, body);
+                        return;
+                    }
+                }
+                response302Header(dos, "/user/login.html");
+                return;
+            }
 
             // index.html
             if (url.equals("/")) {
@@ -122,6 +151,17 @@ public class RequestHandler implements Runnable{
                 }
             }
 
+            // css 출력
+            if (url.endsWith(".css")) {
+                File file = new File("./webapp" + url);
+                if (file.exists()) {
+                    byte[] body = Files.readAllBytes(file.toPath());
+                    response200HeaderCss(dos, body.length);
+                    responseBody(dos, body);
+                    return;
+                }
+            }
+
             // 응답 본문
             byte[] body = "Hello World".getBytes();
             response200Header(dos, body.length);
@@ -132,6 +172,17 @@ public class RequestHandler implements Runnable{
         }
     }
 
+    private void response200HeaderCss(DataOutputStream dos, int lengthOfBodyContent) {
+        try {
+            dos.writeBytes("HTTP/1.1 200 OK \r\n");
+            dos.writeBytes("Content-Type: text/css;charset=utf-8\r\n");
+            dos.writeBytes("Content-Length: " + lengthOfBodyContent + "\r\n");
+            dos.writeBytes("\r\n");
+        } catch (IOException e) {
+            log.log(Level.SEVERE, e.getMessage());
+        }
+    }
+
     private void response302HeaderAddCookie(DataOutputStream dos, String path) {
         try {
             // 302 Found (리다이렉트)
@@ -139,7 +190,7 @@ public class RequestHandler implements Runnable{
             //리다이렉트 위치
             dos.writeBytes("Location: "+ path + "\r\n");
             // 쿠키 추가
-            dos.writeBytes("Set-Cookie: logined=true\r\n");
+            dos.writeBytes("Set-Cookie: logined=true; Path=/\r\n");
             // empty line
             dos.writeBytes("\r\n");
         } catch (IOException e) {
