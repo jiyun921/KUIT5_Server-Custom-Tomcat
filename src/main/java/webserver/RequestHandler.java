@@ -20,12 +20,8 @@ public class RequestHandler implements Runnable{
     Socket connection;
     private static final Logger log = Logger.getLogger(RequestHandler.class.getName());
 
-    private final Repository repository;
-    private Controller controller = new ForwardController();
-
     public RequestHandler(Socket connection) {
         this.connection = connection;
-        repository = MemoryUserRepository.getInstance();
     }
 
     @Override
@@ -36,40 +32,11 @@ public class RequestHandler implements Runnable{
         try (InputStream in = connection.getInputStream(); OutputStream out = connection.getOutputStream()){
             BufferedReader br = new BufferedReader(new InputStreamReader(in));
 
-
             HttpRequest httpRequest  = HttpRequest.from(br);
             HttpResponse httpResponse = new HttpResponse(out);
 
-            String url = httpRequest.getPath();
-            Map<String, String> headers = httpRequest.getHeaders();
-            int requestContentLength = Integer.parseInt(headers.get(CONTENT_LENGTH.getName()));
-
-            // POST 방식 - 회원가입
-            if (url.equals(SIGNUP.getPath())) {
-                controller = new SignUpController();
-            }
-
-            // POST 방식 - 로그인
-            if (url.equals(LOGIN.getPath())) {
-                controller = new LoginController();
-            }
-
-            // userList
-            if (url.equals(USERLIST.getPath())) {
-                controller = new ListController();
-            }
-
-            // index.html
-            if (url.equals(ROOT.getPath())) {
-                controller = new HomeController();
-            }
-
-            // .html, .css 반환
-            if (url.endsWith(".html") || url.endsWith(".css")) {
-                controller = new ForwardController();
-            }
-
-            controller.execute(httpRequest,httpResponse);
+            RequestMapper requestMapper = new RequestMapper(httpRequest,httpResponse);
+            requestMapper.proceed();
 
         } catch (Exception e) {
             log.log(Level.SEVERE,e.getMessage());

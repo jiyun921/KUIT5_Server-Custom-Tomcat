@@ -4,6 +4,7 @@ import webserver.HttpRequest;
 import webserver.HttpResponse;
 
 import static enums.URL.LIST_HTML;
+import static enums.URL.LOGIN_HTML;
 
 public class ListController implements Controller {
     @Override
@@ -12,6 +13,6 @@ public class ListController implements Controller {
             response.redirect(LIST_HTML.getPath(),true);
             return;
         }
-        response.redirect(LIST_HTML.getPath(),false);
+        response.redirect(LOGIN_HTML.getPath(),false);
     }
 }
