@@ -1,23 +1,18 @@
 package webserver;
 
+import controller.*;
 import db.MemoryUserRepository;
-import enums.HttpStatusCode;
-import http.util.HttpRequestUtils;
-import http.util.IOUtils;
-import model.User;
+import db.Repository;
 
 import java.io.*;
 import java.net.Socket;
-import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static enums.HttpHeader.*;
-import static enums.HttpMethod.*;
-import static enums.HttpStatusCode.*;
 import static enums.URL.*;
-import static enums.UserQueryKey.*;
 
 
 // Runnable 구현해서 스레드에서 실행 될 수 있게 함
@@ -25,8 +20,12 @@ public class RequestHandler implements Runnable{
     Socket connection;
     private static final Logger log = Logger.getLogger(RequestHandler.class.getName());
 
+    private final Repository repository;
+    private Controller controller = new ForwardController();
+
     public RequestHandler(Socket connection) {
         this.connection = connection;
+        repository = MemoryUserRepository.getInstance();
     }
 
     @Override
@@ -36,179 +35,45 @@ public class RequestHandler implements Runnable{
         // 클라이언트와 데이터 주고받기 위한 InputStream, OutputStream 열기
         try (InputStream in = connection.getInputStream(); OutputStream out = connection.getOutputStream()){
             BufferedReader br = new BufferedReader(new InputStreamReader(in));
-            DataOutputStream dos = new DataOutputStream(out);
+
 
             HttpRequest httpRequest  = HttpRequest.from(br);
+            HttpResponse httpResponse = new HttpResponse(out);
+
             String url = httpRequest.getPath();
             Map<String, String> headers = httpRequest.getHeaders();
             int requestContentLength = Integer.parseInt(headers.get(CONTENT_LENGTH.getName()));
 
             // POST 방식 - 회원가입
             if (url.equals(SIGNUP.getPath())) {
-                String body = IOUtils.readData(br, requestContentLength);
-                Map<String, String> userValues = HttpRequestUtils.parseQueryParameter(body);
-
-                User user = new User(
-                        userValues.get(USERID.getKey()),
-                        userValues.get(PASSWORD.getKey()),
-                        userValues.get(NAME.getKey()),
-                        userValues.get(EMAIL.getKey())
-                );
-                MemoryUserRepository.getInstance().addUser(user);
-
-                response302Header(dos, INDEX_HTML.getPath());
-                return;
+                controller = new SignUpController();
             }
-
-//            // GET 방식 - 회원가입
-//            if (url.startsWith(SIGNUP.getPath())) {
-//                // ?를 기준으로 구분
-//                String[] signupUrl = url.split("\\?");
-//                if (signupUrl.length==2) {
-//                    String signupString = signupUrl[1];
-//                    Map<String, String> userValues = HttpRequestUtils.parseQueryParameter(signupString);
-//
-//                    User user = new User(
-//                        userValues.get(USERID.getKey()),
-//                        userValues.get(PASSWORD.getKey()),
-//                        userValues.get(NAME.getKey()),
-//                        userValues.get(EMAIL.getKey())
-//                    );
-//                    MemoryUserRepository.getInstance().addUser(user);
-//                }
-//
-//                response302Header(dos,0,INDEX_HTML.getPath());
-//                return;
-//            }
 
             // POST 방식 - 로그인
             if (url.equals(LOGIN.getPath())) {
-                String body = IOUtils.readData(br, requestContentLength);
-                Map<String, String> userValues = HttpRequestUtils.parseQueryParameter(body);
-
-                String loginId = userValues.get(USERID.getKey());
-                String loginPassword = userValues.get(PASSWORD.getKey());
-
-                User user = MemoryUserRepository.getInstance().findUserById(loginId);
-                if (user != null && user.getPassword().equals(loginPassword)) {
-                    response302HeaderAddCookie(dos, INDEX_HTML.getPath());
-                    return;
-                }
-                response302Header(dos, LOGIN_FAILED_HTML.getPath());
-                return;
+                controller = new LoginController();
             }
 
+            // userList
             if (url.equals(USERLIST.getPath())) {
-                if (httpRequest.isLogin()) {
-                    response302Header(dos, LIST_HTML.getPath());
-                    return;
-                }
-                response302Header(dos, LOGIN_HTML.getPath());
-                return;
+                controller = new ListController();
             }
 
             // index.html
             if (url.equals(ROOT.getPath())) {
-                url = INDEX_HTML.getPath();
+                controller = new HomeController();
             }
 
-            // .html 반환
-            if (url.endsWith(".html")) {
-                File file = new File("./webapp" + url);
-                if (file.exists()) {
-                    byte[] body = Files.readAllBytes(file.toPath());
-                    response200Header(dos, body.length);
-                    responseBody(dos, body);
-                    return;
-                }
+            // .html, .css 반환
+            if (url.endsWith(".html") || url.endsWith(".css")) {
+                controller = new ForwardController();
             }
 
-            // css 출력
-            if (url.endsWith(".css")) {
-                File file = new File("./webapp" + url);
-                if (file.exists()) {
-                    byte[] body = Files.readAllBytes(file.toPath());
-                    response200HeaderCss(dos, body.length);
-                    responseBody(dos, body);
-                    return;
-                }
-            }
+            controller.execute(httpRequest,httpResponse);
 
-            // 응답 본문
-            byte[] body = "Hello World".getBytes();
-            response200Header(dos, body.length);
-            responseBody(dos, body);
-
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.log(Level.SEVERE,e.getMessage());
-        }
-    }
-
-    private void response200HeaderCss(DataOutputStream dos, int lengthOfBodyContent) {
-        try {
-            dos.writeBytes(OK.getStatusline());
-            dos.writeBytes(CONTENT_TYPE.getName()+": text/css;charset=utf-8\r\n");
-            dos.writeBytes(CONTENT_LENGTH.getName()+": " + lengthOfBodyContent + "\r\n");
-            dos.writeBytes("\r\n");
-        } catch (IOException e) {
-            log.log(Level.SEVERE, e.getMessage());
-        }
-    }
-
-    // boolean으로 if문 처리해서 밑에 헤더함수랑 합치기 !
-    private void response302HeaderAddCookie(DataOutputStream dos, String path) {
-        try {
-            // 302 Found (리다이렉트)
-            dos.writeBytes(Found.getStatusline());
-            //리다이렉트 위치
-            dos.writeBytes(LOCATION.getName()+": "+ path + "\r\n");
-            // 쿠키 추가
-            dos.writeBytes(SET_COOKIE.getName()+": logined=true; Path=/\r\n");
-            // empty line
-            dos.writeBytes("\r\n");
-        } catch (IOException e) {
-            log.log(Level.SEVERE, e.getMessage());
-        }
-    }
-
-    private void response302Header(DataOutputStream dos, String path) {
-        try {
-            // 302 Found (리다이렉트)
-            dos.writeBytes(Found.getStatusline());
-            //리다이렉트 위치
-            dos.writeBytes(LOCATION.getName()+": "+ path + "\r\n");
-            // empty line
-            dos.writeBytes("\r\n");
-        } catch (IOException e) {
-            log.log(Level.SEVERE, e.getMessage());
-        }
-    }
-
-    // 응답 헤더 보내기
-    private void response200Header(DataOutputStream dos, int lengthOfBodyContent) {
-        try {
-            // 정상적인 응답
-            dos.writeBytes(OK.getStatusline());
-            // 보내는 데이터 html, 인코딩 utf-8
-            dos.writeBytes(CONTENT_TYPE.getName()+": text/html;charset=utf-8\r\n");
-            // 본문의 바이트 크기
-            dos.writeBytes(CONTENT_LENGTH.getName()+": " + lengthOfBodyContent + "\r\n");
-            // empty line
-            dos.writeBytes("\r\n");
-        } catch (IOException e) {
-            log.log(Level.SEVERE, e.getMessage());
-        }
-    }
-
-    // 응답 본문 보내기
-    private void responseBody(DataOutputStream dos, byte[] body) {
-        try {
-            // body 내용 전송
-            dos.write(body, 0, body.length);
-            // 버퍼에 쌓인 데이터 모두 보냄
-            dos.flush();
-        } catch (IOException e) {
-            log.log(Level.SEVERE, e.getMessage());
+            System.out.println(Arrays.toString(e.getStackTrace()));
         }
     }
 
